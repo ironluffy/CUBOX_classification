@@ -1,0 +1,10 @@
+saved_results
+**total_**
+wandb
+.idea
+*.pyc
+__pycache__
+*testbench*
+*tmp*
+*1v.sh
+runs
