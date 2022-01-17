@@ -110,6 +110,12 @@ if __name__ == "__main__":
         # remember best prec@1 and save checkpoint
         if val_acc > best_val:
             best_val_test = test_accs
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict': model.state_dict(),
+                'best_val': best_val,
+                'best_val_test': best_val_test,
+            }, is_best=True, filename=os.path.join(args.save_dir, 'epoch{}.pth'.format(epoch)))
         best_val = max(val_acc, best_val)
 
         if epoch > 0 and epoch % 20 == 0:
