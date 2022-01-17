@@ -1,7 +1,23 @@
 from .transforms import DummyTransform, get_transform
 from .cubox import CUBOXdataset, occlusion_types
 from torch.utils.data import ConcatDataset, DataLoader
-from icecream import icecream
+import tqdm
+
+def get_cubox_dataset(data_config, data_root, transform, split, combine=True):
+    datasets = []
+    for occl in data_config[split]:
+        # print(f"Collecting Occlusion: {occl}")
+        datasets.append(CUBOXdataset(data_root, split=split, occlusion=occl, transform=transform))
+    if combine:
+        dataset = ConcatDataset(datasets)
+    print(f"Total {len(dataset)} number of samples loaded")
+    classes = datasets[0].classes
+    return dataset, classes
+
+def get_test_dataset(data_config, data_root, transform_type):
+    _, val_transform = get_transform(transform_type)
+    return get_cubox_dataset(data_config, data_root, val_transform, 'test', combine=True)
+
 
 def get_dataset(dataset_name, data_config, data_root, transform_type):
     train_transform, val_transform = get_transform(transform_type)
@@ -36,3 +52,11 @@ def get_loaders(dataset_name, data_config, data_root, transform_type, args):
     print('Test loaders prepared')
 
     return train_loader, val_loaders, test_loaders, num_classes
+
+
+def get_test_loader(data_config, data_root, transform_type, args):
+    print("Preparing test datasets...")
+    test_dataset, classes = get_test_dataset(data_config, data_root, transform_type)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.workers, shuffle=True)
+    print('Test loaders prepared!')
+    return test_loader, classes
