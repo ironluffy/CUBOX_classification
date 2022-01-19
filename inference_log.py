@@ -13,14 +13,16 @@ import argparse
 from configs import data_config
 from dataset import get_test_loader
 from utils.eval_meter import Evaluate
+from utils import print_log, get_root_logger
 
 KST = pytz.timezone('Asia/Seoul')
 
-def simple_inference(test_loader, model, evaluator):
+def simple_inference(test_loader, model, evaluator, logger):
     """
     Run evaluation
     """
-    print("Start inference...", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    # print("Start inference...", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    print_log("Start inference...", logger=logger)
     model.eval()
     # print(val_loader.dataset[0])
 
@@ -50,6 +52,7 @@ parser.add_argument('--optim', default='sgd', choices=['sgd', 'adam', 'adamw'])
 parser.add_argument('--sched', default='cos', choices=['multi', 'non', 'cos', 'cos_warm'])
 parser.add_argument('--workers', default=4, type=int)
 parser.add_argument('--ckpt_dir', type=str, required=True)
+parser.add_argument('--ckpt_file', type=str, default='epoch80.pth')
 
 """
 Example: CUDA_VISIBLE_DEVICES=4 python main.py --method=finetune --data_config=none2all --transform_type=basic --epochs=100 
@@ -59,7 +62,9 @@ Example: CUDA_VISIBLE_DEVICES=4 python main.py --method=finetune --data_config=n
 if __name__ == "__main__":
     # os.environ['TZ'] = 'Asia/Seoul'
     # time.tzset()
-    print("Evaluate!", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    logger = get_root_logger()
+    # print("Evaluate!", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    print_log("Evaluate!")
 
     args = parser.parse_args()
     data_conf = data_config[args.dataset][args.data_config]
@@ -70,15 +75,16 @@ if __name__ == "__main__":
                                                 transform_type=args.transform_type, args=args)
     # TODO refactor
     model = models.get_model(trained_args.arch, num_classes=len(classes), pretrained=trained_args.not_pretrain)
-    model.load_state_dict(torch.load(os.path.join(args.ckpt_dir, 'epoch80.pth'))['state_dict'])
+    model.load_state_dict(torch.load(os.path.join(args.ckpt_dir, args.ckpt_file))['state_dict'])
     model.cuda()
 
-
     evaluator = Evaluate(classes)
-    evaluator = simple_inference(test_loader, model, evaluator)
-    print("Inference Done!")
+    evaluator = simple_inference(test_loader, model, evaluator, logger)
+    print_log("Inference Done!", logger)
     # evaluate on test set
-    print("Start evaluating with inferenced results... ", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    # print("Start evaluating with inferenced results... ", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    print_log("Start evaluating with inferenced results... ", logger=logger)
     evaluator.summarize()
 
-    print("Evaluation end!", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    # print("Evaluation end!", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    print_log("Evaluation end!", logger=logger)

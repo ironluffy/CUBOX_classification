@@ -74,12 +74,12 @@ class Evaluate(object):
 
     def draw_save_roc_curve(self, tprs, fprs, cls):
         cls_name = self.classes[cls]
+        plt.figure()
         plot = sns.lineplot(x=fprs, y=tprs).set_title(cls_name.capitalize())
         fig = plot.get_figure()
 
         os.makedirs("./roc_curves", exist_ok=True)
         fig.savefig(f"./roc_curves/ROC_{cls_name.capitalize()}.png")
-        plot.fig.clf()
 
     def calc_roc_curve(self):
         roc_values = {}

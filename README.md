@@ -1,4 +1,4 @@
-# 🧩 CUBOX Image Classification
+# 🕹 CUBOX Image Classification
 > ***Image Classification with CUBOX dataset***
 >
 >

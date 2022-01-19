@@ -2,7 +2,6 @@ import os
 import tqdm
 import time
 import torch
-import wandb
 import models
 import numpy as np
 import importlib
@@ -10,8 +9,10 @@ import argparse
 
 from configs import data_config
 from dataset import get_loaders
-from utils import save_checkpoint, get_optimizer, get_lr_scheduler
+from utils import save_checkpoint, get_optimizer, get_lr_scheduler, get_root_logger, print_log
 from classification.eval import validate
+from utils.logging import get_root_logger
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='cubox', type=str, choices=['cubox'])
@@ -38,11 +39,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     data_conf = data_config[args.dataset][args.data_config]
-    args.save_dir = os.path.join('../saved_results', args.method, args.data_config, args.transform_type,
+    args.save_dir = os.path.join('./classification_checkpoints', args.method, args.data_config, args.transform_type, args.experiment, 
                                  time.strftime("%Y%m%d-%H%M%S"))
-    wandb.login(key='acbbebf92bf3a0033a26d766ff2cd06c15e5a2ab')
-    wandb.init(project="cubox_cls", entity="yuuraa")
-    wandb.run.name = os.path.join(args.experiment, args.method, args.data_config, args.transform_type)
+
+    logger = get_root_logger()
 
     # cudnn.benchmark = True
     # Check the save_dir exists or not
@@ -50,21 +50,18 @@ if __name__ == "__main__":
         os.makedirs(args.save_dir)
 
     torch.save(args, os.path.join(args.save_dir, 'args.pth'))
-    wandb.config.update(args)
 
     train_loader, val_loaders, test_loaders, num_classes = get_loaders(args.dataset, data_conf, data_root=args.data_root,
                                                                        transform_type=args.transform_type, args=args)
 
     model = models.get_model(args.arch, num_classes=num_classes, pretrained=args.not_pretrain)
     model.cuda()
-    wandb.watch(model)
     optimizer = get_optimizer(args.dataset, args.optim, model, args.lr)
     lr_scheduler = get_lr_scheduler(args.dataset, args.sched, optimizer, args.epochs)
 
     # TODO if there are more tasks, need to be generalized
     # import train function from given method
     method = importlib.import_module('classification.{}'.format(args.method))
-    wandb.config.update(method.method_hyperparams)
     train = method.train
 
     save_checkpoint({
@@ -82,7 +79,7 @@ if __name__ == "__main__":
     for epoch in tqdm.trange(args.epochs):
 
         # train for one epoch
-        train(train_loader, model, optimizer, epoch + 1, args, epoch_storage)
+        train(train_loader, model, optimizer, epoch + 1, args, epoch_storage, logger=logger)
         if lr_scheduler is not None:
             lr_scheduler.step()
 
@@ -91,11 +88,11 @@ if __name__ == "__main__":
         val_obs, test_obs = dict(), dict()
         for i, val_loader in enumerate(val_loaders):
             val_obs[data_conf["val"][i]] = validate(val_loader, model, prefix='val/{}'.format(data_conf["val"][i]),
-                                                    epoch=epoch + 1)
+                                                    epoch=epoch + 1, logger=logger)
         # evaluate on test set
         for i, test_loader in enumerate(test_loaders):
             test_obs[data_conf["val"][i]] = validate(test_loader, model, prefix='test/{}'.format(data_conf["test"][i]),
-                                                     epoch=epoch + 1)
+                                                     epoch=epoch + 1, logger=logger)
 
         val_accs = []
         for occl in data_conf["train"]:
@@ -126,4 +123,4 @@ if __name__ == "__main__":
             }, is_best, filename=os.path.join(args.save_dir, 'epoch{}.pth'.format(epoch)))
 
     for i, occl in enumerate(data_conf["train"]):
-        wandb.log({"{}/Best Val. Test Acc.".format(occl): test_accs[i]})
+        print_log({"{}/Best Val. Test Acc.".format(occl): test_accs[i]}, logger=logger)

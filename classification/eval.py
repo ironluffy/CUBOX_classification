@@ -1,13 +1,12 @@
-import wandb
 import torch
 import torch.optim
 import torch.utils.data
 import torch.nn.parallel
 
-from utils import Observe
+from utils import Observe, print_log
 
 
-def validate(val_loader, model, prefix, epoch):
+def validate(val_loader, model, prefix, epoch, logger):
     """
     Run evaluation
     """
@@ -28,6 +27,6 @@ def validate(val_loader, model, prefix, epoch):
             # measure accuracy and record loss
             model_observe.update(output, batch)
 
-    wandb.log(model_observe.get_info_dict(), step=epoch)
+    print_log(model_observe.get_info_dict(), logger=logger)
 
     return model_observe

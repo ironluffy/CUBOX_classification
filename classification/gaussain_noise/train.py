@@ -1,12 +1,11 @@
-import wandb
 import torch.utils.data
 
-from utils import Observe
+from utils import Observe, print_log
 
 method_hyperparams = dict()
 
 
-def train(train_loader, model, optimizer, epoch, args, epoch_storage):
+def train(train_loader, model, optimizer, epoch, args, epoch_storage, logger):
     """
         Run one train epoch
     """
@@ -32,5 +31,6 @@ def train(train_loader, model, optimizer, epoch, args, epoch_storage):
 
         model_observe.update(output, batch)
 
-    wandb.log(model_observe.get_info_dict(), step=epoch)
+    print_log(model_observe.get_info_dict(), logger=logger)
+
     return model_observe
