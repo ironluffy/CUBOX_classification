@@ -13,18 +13,18 @@ data_config = {
             "test": ["none"]
         },
         
-        "all2all": {
-           "train": ["none", "semitransparent", "wiredense", "wiremedium", "wireloose"],
-           "val": ["none", "semitransparent", "wiredense", "wiremedium", "wireloose"],
-           "test": ["none", "semitransparent", "wiredense", "wiremedium", "wireloose"]
+        # "all2all": {
+        #    "train": ["none", "semitransparent", "wiredense", "wiremedium", "wireloose"],
+        #    "val": ["none", "semitransparent", "wiredense", "wiremedium", "wireloose"],
+        #    "test": ["none", "semitransparent", "wiredense", "wiremedium", "wireloose"]
         
-         },
+        #  },
        
-#         "all2all": {
-# 	    "train": ["None", "SemiTransparent", "WireDense", "WireMedium", "WireLoose"],
-# 	    "val": ["None", "SemiTransparent", "WireDense", "WireMedium", "WireLoose"],
-# 	    "test": ["None", "SemiTransparent", "WireDense", "WireMedium", "WireLoose"]
-# },
+        "all2all": {
+	    "train": ["None", "SemiTransparent", "WireDense", "WireMedium", "WireLoose"],
+	    "val": ["None", "SemiTransparent", "WireDense", "WireMedium", "WireLoose"],
+	    "test": ["None", "SemiTransparent", "WireDense", "WireMedium", "WireLoose"]
+},
         "semi2all": {
             "train": ["semitransparent"],
             "val": ["none", "semitransparent", "wiredense", "wiremedium", "wireloose"],
