@@ -63,12 +63,10 @@ if __name__ == "__main__":
     # os.environ['TZ'] = 'Asia/Seoul'
     # time.tzset()
     logger = get_root_logger()
-    # print("Evaluate!", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
-    print_log("Evaluate!")
+    print_log("Evaluate!", logger=logger)
 
     args = parser.parse_args()
     data_conf = data_config[args.dataset][args.data_config]
-    trained_args = torch.load(os.path.join(args.ckpt_dir, 'args.pth'))
     trained_args = torch.load(os.path.join(args.ckpt_dir, 'args.pth'))
 
     test_loader, classes = get_test_loader(data_conf, data_root=args.data_root,
@@ -80,7 +78,7 @@ if __name__ == "__main__":
 
     evaluator = Evaluate(classes)
     evaluator = simple_inference(test_loader, model, evaluator, logger)
-    print_log("Inference Done!", logger)
+    print_log("Inference Done!", logger=logger)
     # evaluate on test set
     # print("Start evaluating with inferenced results... ", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
     print_log("Start evaluating with inferenced results... ", logger=logger)
