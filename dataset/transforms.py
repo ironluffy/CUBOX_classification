@@ -1,9 +1,18 @@
 import numpy as np
+import cv2
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-from PIL import Image, ImageChops
-# from torchvision.transforms.functional import InterpolationMode # TODO: for torchvision lower than 0.10.1
+import torchvision.transforms.functional as F
+from PIL import Image, ImageChops, ImageDraw
+
+
+class WireFenceImg:
+    wire_img = None
+    threshold = 0
+
+    def set_wire(self, wire_img):
+        self.wire_img = wire_img
 
 
 def get_transform(aug_type):
@@ -41,6 +50,54 @@ def get_transform(aug_type):
             transforms.ToTensor(),
             transforms.Normalize(cubox_mean, cubox_std)
         ])
+    elif aug_type == 'randsynthetic':
+        train_transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            RandomSyntheticPattern((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "synth_degen":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            SingleSyntheticPattern(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "box_degen":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            BoxCalcSyntheticPattern('center'),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
     else:
         raise NotImplementedError
 
@@ -58,6 +115,14 @@ class DummyTransform(nn.Module):
 
     def forward(self, img):
         return img
+
+
+class UseImage(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, img_params):
+        return img_params['img']
 
 
 class SyntheticPattern(nn.Module):
@@ -81,6 +146,95 @@ class SyntheticPattern(nn.Module):
     def forward(self, img):
         pattern = self.transform(self.pattern)
         return ImageChops.multiply(img, pattern)
+
+
+class RandomSyntheticPattern(nn.Module):
+    def __init__(self, img_size):
+        super().__init__()
+        self.transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomAffine(degrees=60, shear=60),
+            transforms.RandomPerspective(distortion_scale=0.5, p=0.5),
+            transforms.CenterCrop(img_size)
+        ])
+        self.patterns = []
+        self.p = 0.2
+        for density in [1, 2, 4, 8, 9, 10, 11, 12, 13, 16, 17]:
+            tmp = Image.open('./dataset/patterns/{}x.jpg'.format(density))
+            self.patterns.append(np.array(tmp))
+        tmp.close()
+
+    def forward(self, img):
+        if self.p < torch.rand(1):
+            return img
+        else:
+            pattern_id = np.random.choice(len(self.patterns))
+            pattern = self.transform(self.patterns[pattern_id])
+            comb = ImageChops.multiply(img, pattern)
+        return comb
+
+
+class SingleSyntheticPattern(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.wire = WireFenceImg.wire_img
+        
+    def forward(self, img):
+        # w, h = img.size
+        # wire = F.center_crop(self.wire, (h, w))
+        wire = self.wire
+        comb = ImageChops.multiply(img, wire)
+        return comb
+
+
+class BoxCalcSyntheticPattern(nn.Module):
+    def __init__(self, box_loc='center', box_color=(0, 0, 0)):
+        super().__init__()
+        self.box_loc = box_loc
+        self.box_color = box_color
+        self.cropper = transforms.CenterCrop(224)
+
+        wire = WireFenceImg.wire_img
+        thresh = WireFenceImg.threshold
+        wire_thresh = cv2.cvtColor(cv2.threshold(np.array(wire), thresh, 255, cv2.THRESH_BINARY)[1], cv2.COLOR_BGR2GRAY)
+        wire_thresh_inv = np.ones_like(wire_thresh)*255 - wire_thresh
+        self.wire_inv = Image.fromarray(wire_thresh_inv.astype(np.uint8))
+
+    def calc_area(self, img_metas):
+        occl_mask = np.logical_and(self.wire_inv, img_metas['seg_mask']).astype(np.uint8)
+        area = occl_mask.sum()
+        return area
+
+    def get_box_loc(self, img_metas):
+        (xs, ys), (xe, ye) = img_metas['img_locs']
+        if self.box_loc == 'center':
+            x = (xs + xe) // 2
+            y = (ys + ye) // 2
+
+            # r, c = r - (h//2 - 112), c - (r//2 - 112)
+            # if r < 0 or c < 0 or r > 112 or c > 112:
+            #     r, c = 112, 112
+        else:
+            raise NotImplementedError(f"Box location {self.box_loc} not implemented")
+        return x, y
+
+    def forward(self, img_metas):
+        """
+        - img_metas
+            - img: np array
+            - img_locs: 물체 bbox 꼭지점 4곳
+        """
+        box_area = self.calc_area(img_metas)
+        box_r = int(np.sqrt(box_area))
+
+        x, y = self.get_box_loc(img_metas)
+        img = Image.fromarray(img_metas['img'].copy())
+        img = self.cropper(img)
+
+        draw = ImageDraw.Draw(img)
+        draw.rectangle(xy=((x, y), (x+box_r, y+box_r)), fill=tuple(self.box_color))
+
+        return np.array(img)
 
 
 class CutMix(nn.Module):
