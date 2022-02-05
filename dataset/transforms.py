@@ -98,6 +98,22 @@ def get_transform(aug_type):
             transforms.ToTensor(),
             transforms.Normalize(cubox_mean, cubox_std)
         ])
+    elif aug_type == "pixel_degen":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            PixelNoise(),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
     else:
         raise NotImplementedError
 
@@ -233,6 +249,53 @@ class BoxCalcSyntheticPattern(nn.Module):
 
         draw = ImageDraw.Draw(img)
         draw.rectangle(xy=((x, y), (x+box_r, y+box_r)), fill=tuple(self.box_color))
+
+        return np.array(img)
+
+
+class PixelNoise(nn.Module):
+    def __init__(self, box_loc='center', box_color=(0, 0, 0)):
+        super().__init__()
+        self.box_loc = box_loc
+        self.box_color = box_color
+        self.cropper = transforms.CenterCrop(224)
+
+        wire = WireFenceImg.wire_img
+        thresh = WireFenceImg.threshold
+        wire_thresh = cv2.cvtColor(cv2.threshold(np.array(wire), thresh, 255, cv2.THRESH_BINARY)[1], cv2.COLOR_BGR2GRAY)
+        wire_thresh_inv = np.ones_like(wire_thresh)*255 - wire_thresh
+        self.wire_inv = Image.fromarray(wire_thresh_inv.astype(np.uint8))
+
+    def calc_area(self, img_metas):
+        occl_mask = np.logical_and(self.wire_inv, img_metas['seg_mask']).astype(np.uint8)
+        area = occl_mask.sum()
+        return area
+
+    def get_pixel_loc(self, img_metas, area):
+        nz_cs, nz_rs = (img_metas['seg_mask']).nonzero()
+        inds = np.random.choice(range(len(nz_cs)), area, replace=False)
+        
+        if len(inds) == 0:
+            return nz_cs, nz_rs
+
+        return nz_cs[inds], nz_rs[inds]
+
+    def forward(self, img_metas):
+        """
+        - img_metas
+            - img: np array
+            - img_locs: 물체 bbox 꼭지점 4곳
+        """
+        occ_area = self.calc_area(img_metas)
+        pixel_cs, pixel_rs = self.get_pixel_loc(img_metas, occ_area)
+
+        img = img_metas['img'].copy()
+        img = Image.fromarray(img)
+        img = np.array(self.cropper(img))
+
+        for pixel_c, pixel_r in zip(pixel_cs, pixel_rs):
+            img[pixel_c, pixel_r, :] = 0
+        img = Image.fromarray(img)
 
         return np.array(img)
 
