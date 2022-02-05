@@ -24,7 +24,7 @@ from synthwire_img import wire_cfg
 KST = pytz.timezone('Asia/Seoul')
 
 
-def create_wire(wire_dict, save_dir):
+def create_wire(wire_dict, save_dir, logger):
     wire_no = wire_dict['wire_no']
     affine_degree = wire_dict['affine_degree']
     shear_coords = wire_dict['shear_coords']
@@ -46,7 +46,8 @@ def create_wire(wire_dict, save_dir):
 
     save_path = f"{save_dir}/synth_wire.png"
     wire.save(save_path)
-    print(f"Synthetic wire saved to path {save_path}", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    print_log(f"Synthetic wire saved to path {save_path}", logger=logger)
+    print_log(wire_dict, logger=logger)
 
     return wire
 
@@ -62,11 +63,14 @@ def save_denorm_sample(img, img_name, save_path):
     transforms.ToPILImage()(img).save(f"{save_path}/{img_name}")
 
 
-def simple_inference(test_loader, model, evaluator, model_name='', transform_type='', save_path=None):
+def simple_inference(test_loader, model, evaluator, model_name='', transform_type='', save_path=None, logger=None):
     """
     Run evaluation
     """
-    print(f"Start inference {model_name.capitalize()}-{transform_type}...", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    if not logger:
+        logger = get_root_logger()
+
+    print_log(f"Start inference {model_name.capitalize()}-{transform_type}...", logger)
     model.eval()
 
     with torch.no_grad():
@@ -97,7 +101,7 @@ BEST_CKPTS = {
 }
 
 WIRE_DICT = {
-    'wire_no': '9',
+    'wire_no': '2',
     'affine_degree': 60,
     'shear_coords': (30, 45),
     'distort_scale': 0.5,
@@ -109,6 +113,7 @@ if __name__ == "__main__":
     import re
     import time
     from utils.eval_meter import Evaluate
+    from utils.logging import get_root_logger, print_log
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', required=True)
@@ -120,14 +125,16 @@ if __name__ == "__main__":
     parser.add_argument('--workers', default=4, type=int)
     parser.add_argument('--result_dir', default='./pred_result')
 
-    print("Evaluate!", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
-    save_dir = os.path.join('./synth_results', (time.strftime("%Y%m%d-%H%M%S")))
+    start_time = time.strftime("%Y%m%d-%H%M%S")
+    save_dir = os.path.join('./synth_results', (start_time))
     os.makedirs(save_dir)
+    logger = get_root_logger(log_file=f"{save_dir}/result.txt")
+    print_log("Evaluate!", logger)
 
     args = parser.parse_args()
 
     # Make synthetic wire image
-    synth_wire = create_wire(WIRE_DICT, save_dir)
+    synth_wire = create_wire(WIRE_DICT, save_dir, logger)
     WireFenceImg.wire_img = synth_wire
     WireFenceImg.threshold = wire_cfg[WIRE_DICT['wire_no']]['threshold']
     
@@ -135,7 +142,7 @@ if __name__ == "__main__":
     
     test_dataset, classes = get_test_dataset(data_conf, data_root=args.data_root, transform_type=args.transform_type)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.workers, shuffle=True)
-    transform_types = ['synth_degen', 'box_degen']
+    transform_types = ['synth_degen', 'box_degen', 'pixel_degen']
 
     save_samples = True
     for model_name, best_ckpt in BEST_CKPTS.items():
@@ -145,7 +152,7 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(best_ckpt)['state_dict'])
         model.cuda()
         
-        evaluator = Evaluate(classes)
+        evaluator = Evaluate(classes, logger)
         for transform_type in transform_types:
             _, val_transform = get_transform(transform_type)
             test_dataset.transform = val_transform
@@ -153,9 +160,9 @@ if __name__ == "__main__":
 
             if save_samples:            
                 os.makedirs(f"{save_dir}/{transform_type}")
-                evaluator = simple_inference(test_loader, model, evaluator, model_name, transform_type=transform_type, save_path=f"{save_dir}/{transform_type}")
+                evaluator = simple_inference(test_loader, model, evaluator, model_name, transform_type=transform_type, save_path=f"{save_dir}/{transform_type}", logger=logger)
             else:
-                evaluator = simple_inference(test_loader, model, evaluator, model_name, transform_type=transform_type, save_path=None)
+                evaluator = simple_inference(test_loader, model, evaluator, model_name, transform_type=transform_type, save_path=None, logger=logger)
 
             evaluator.summarize()
         
@@ -163,4 +170,4 @@ if __name__ == "__main__":
         model.cpu()
         del(model)
 
-    print("Inference Done!", datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S,%z"))
+    print_log("Inference Done!", logger)

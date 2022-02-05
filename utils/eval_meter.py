@@ -6,12 +6,15 @@ import seaborn as sns
 import tqdm
 from terminaltables import AsciiTable
 import os
+from .logging import print_log
 
 
 class Evaluate(object):
     """Computes Accuracy, F1 Score, AUC Score per classess"""
     
-    def __init__(self, classes):
+    def __init__(self, classes, logger):
+        self.logger = logger
+
         self.gts = []
         self.img_ids = []
         self.pred_probs = [] # 각 샘플 별 gt 클래스에 맞는 모델의 logit 확률값들
@@ -72,6 +75,14 @@ class Evaluate(object):
         assert sum([tp, fp, fn, tn]) == len(cls_pred)
         return tp, tn, fp, fn
 
+
+    def acc_summary(self):
+        acc = round((sum(np.array(self.preds) == np.array(self.gts))/ len(self.gts)), 4)
+        top5_preds = np.argsort(np.array(self.pred_probs), axis=1)[:, -5:]
+        top5_acc = round((sum([gt in top5_pred for gt, top5_pred in zip(self.gts, top5_preds.tolist())]) / len(self.gts)), 4)
+
+        return acc, top5_acc
+
     def draw_save_roc_curve(self, tprs, fprs, cls):
         cls_name = self.classes[cls]
         plot = sns.lineplot(x=fprs, y=tprs).set_title(cls_name.capitalize())
@@ -118,7 +129,7 @@ class Evaluate(object):
         self.per_class_recall = []
         self.per_class_f1 = []
 
-        print("Summarizing results")
+        print_log("Summarizing results", self.logger)
         for cls in tqdm.tqdm(range(self.n_classes)):
             tp, tn, fp, fn = self.confusion_matrix(cls)
             self.confusion_matrices.append([tp, tn, fp, fn])
@@ -129,10 +140,10 @@ class Evaluate(object):
             self.per_class_recall.append(recall)
             self.per_class_f1.append(self.f1_score(precision, recall))
         
-        print("Summarizing roc curve results")
-        self.roc_results = self.calc_roc_curve()
-        for cls, roc_value in self.roc_results.items():
-            self.draw_save_roc_curve(roc_value['tpr'], roc_value['fpr'], cls)
+        # print_log("Summarizing roc curve results")
+        # self.roc_results = self.calc_roc_curve()
+        # for cls, roc_value in self.roc_results.items():
+        #     self.draw_save_roc_curve(roc_value['tpr'], roc_value['fpr'], cls)
 
     def update(self, output, batch):
         with torch.no_grad():
@@ -142,52 +153,48 @@ class Evaluate(object):
             self.preds.extend(torch.argmax(output, dim=1).cpu().detach().numpy())
 
     def print_acc_metric(self):
-        print("\n\n =========  Accuracy Metric  =========")
+        print_log("\nSummarize Accuracy: ", self.logger)
+        acc, top5_acc = self.acc_summary()
+        print_log(f"\nAccuracy Top-1: {acc}, Top-5 : {top5_acc}\n", self.logger)
+        
+        print_log("\n\n =========  Accuracy Metric  =========", self.logger)
         accuracy_table_data = [["Class ID", "TP", "TN", "FP", "FN", "Accuracy"]]
-        # print("|   Class ID   |   TP   |   TN   |   FP   |   FN   |   Accuracy   |")
+        # print_log("|   Class ID   |   TP   |   TN   |   FP   |   FN   |   Accuracy   |")
         for i, acc in enumerate(self.per_class_acc):
             tp, tn, fp, fn = self.confusion_matrices[i]
             accuracy_table_data.append([self.classes[i].capitalize(), tp, tn, fp, fn, round(acc, 2)])
         
         accuracy_table = AsciiTable(accuracy_table_data)
-        print(accuracy_table.table)
+        print_log(accuracy_table.table, self.logger)
 
-        print("\nSummarize Accuracy: ")
-        accuracy_summarize_data = [["Class ID", "Accuracy"]]
-        # print("|   Class ID   |   Accuracy   |")
-        for i, acc in enumerate(self.per_class_acc):
-            accuracy_summarize_data.append([self.classes[i].capitalize(), round(acc, 2)])
-            # print(f"|   {self.classes[i].capitalize()}   |   {acc}   |")
-        accuracy_summarize_table = AsciiTable(accuracy_summarize_data)
-        print(AsciiTable(accuracy_summarize_table.table))
 
     def print_f1_metric(self):
-        print("\n\n =========  F1 Score Metric  =========")
+        print_log("\n\n =========  F1 Score Metric  =========", self.logger)
         f1_table_data = [[ "Class ID",  "TP", "FP", "FN", "Precision", "Recall", "F1-Score" ]]
-        # print("|   Class ID   |   TP   |   FP   |   FN   |   Precision   |   Recall   |   F1-Score   |")
+        # print_log("|   Class ID   |   TP   |   FP   |   FN   |   Precision   |   Recall   |   F1-Score   |")
         for i, (precision, recall, f1) in enumerate(zip(self.per_class_precision, self.per_class_recall, self.per_class_f1)):
             tp, _, fp, fn = self.confusion_matrices[i]
-            # print(f"|   {self.classes[i].capitalize()}   |   {tp}   |   {fp}   |   {fn}   |   {precision}   |   {recall}   |   {f1}   |")
+            # print_log(f"|   {self.classes[i].capitalize()}   |   {tp}   |   {fp}   |   {fn}   |   {precision}   |   {recall}   |   {f1}   |")
             f1_table_data.append([self.classes[i].capitalize(), tp, fp, fn, round(precision, 2), round(recall, 2), round(f1, 2)])
 
         f1_table = AsciiTable(f1_table_data)
-        print(f1_table.table)
+        print_log(f1_table.table, self.logger)
 
         f1_summary_data = [["Class ID", "F1 Score"]]
-        # print("|   Class ID   |   F1 Score   |")
+        # print_log("|   Class ID   |   F1 Score   |")
         for i, f1 in enumerate(self.per_class_f1):
             f1_summary_data.append([self.classes[i].capitalize(), round(f1, 2)])
-            # print(f"|   {self.classes[i].capitalize()}   |   {f1}   |")
+            # print_log(f"|   {self.classes[i].capitalize()}   |   {f1}   |")
         
         f1_summary_table = AsciiTable(f1_summary_data)
-        print("\nSummarize F1: ")
-        print(f1_summary_table.table)
+        print_log("\nSummarize F1: ", self.logger)
+        print_log(f1_summary_table.table, self.logger)
 
 
     def print_auc_metric(self):
-        print("\n\n ===========  AUC Metric  ============")
+        print_log("\n\n ===========  AUC Metric  ============", self.logger)
         auc_data = [[ "Class ID", "TP", "TN", "FP", "FN", "P", "N", "Threshold", "TNR", "FPR", "TPR" ]]
-        # print("|   Class ID   |   TP   |   TN   |   FP   |   FN   |   P   |   N   |   Threshold   |   TNR   |   FPR   |   TPR   |")
+        # print_log("|   Class ID   |   TP   |   TN   |   FP   |   FN   |   P   |   N   |   Threshold   |   TNR   |   FPR   |   TPR   |")
         for cls, roc_value in self.roc_results.items():
             for i, thresh in enumerate(roc_value['thresh']):
                 tp = roc_value['tps'][i]
@@ -198,25 +205,25 @@ class Evaluate(object):
                 fpr = roc_value['fpr'][i]
                 tnr = roc_value['tnr'][i]
                 auc_data.append([self.classes[cls].capitalize(), tp, tn, fp, fn, tp+fn, fp+tn, thresh, round(tnr, 2), round(fpr, 2), round(tpr, 2)])
-                # print(f"|   {self.classes[cls].capitalize()}   |   {tp}   |   {tn}   |   {fp}   |   {fn}   |   {tp+fn}   |   {fp+tn}   |   {thresh}   |   {tnr}   |   {fpr}   |   {tpr}   |")
+                # print_log(f"|   {self.classes[cls].capitalize()}   |   {tp}   |   {tn}   |   {fp}   |   {fn}   |   {tp+fn}   |   {fp+tn}   |   {thresh}   |   {tnr}   |   {fpr}   |   {tpr}   |")
 
         auc_table = AsciiTable(auc_data)
-        print(auc_table.table)
+        print_log(auc_table.table, self.logger)
 
-        print("\n Summarize AUC: ")
+        print_log("\n Summarize AUC: ", self.logger)
         auc_summary_data = [[ "Class ID", "AUC" ]]
-        # print("|   Class ID   |   AUC   |")
+        # print_log("|   Class ID   |   AUC   |")
         for cls, roc_value in self.roc_results.items():
             auc_summary_data.append([ self.classes[cls].capitalize(), round(roc_value['auc'],2)])
-            # print(f"|   {self.classes[cls].capitalize()}   |   {roc_value['auc']}   |")
+            # print_log(f"|   {self.classes[cls].capitalize()}   |   {roc_value['auc']}   |")
         auc_summary_table = AsciiTable(auc_summary_data)
-        print(auc_summary_table.table)
+        print_log(auc_summary_table.table, self.logger)
 
     def summarize(self):
         self.reset()
         self.summarize_result()
 
         self.print_acc_metric()
-        self.print_f1_metric()
-        self.print_auc_metric()
+        # self.print_f1_metric()
+        # self.print_auc_metric()
     
