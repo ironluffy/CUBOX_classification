@@ -114,6 +114,38 @@ def get_transform(aug_type):
             transforms.ToTensor(),
             transforms.Normalize(cubox_mean, cubox_std)
         ])
+    elif aug_type == "synth_obj_region":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            RegionSyntheticPattern(),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "synth_bgr_region":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            RegionSyntheticPattern(inverse=True),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
     else:
         raise NotImplementedError
 
@@ -196,11 +228,30 @@ class SingleSyntheticPattern(nn.Module):
         self.wire = WireFenceImg.wire_img
         
     def forward(self, img):
-        # w, h = img.size
-        # wire = F.center_crop(self.wire, (h, w))
         wire = self.wire
         comb = ImageChops.multiply(img, wire)
         return comb
+
+
+class RegionSyntheticPattern(nn.Module):
+    def __init__(self, inverse=False):
+        super().__init__()
+        self.inverse = inverse
+        self.wire = WireFenceImg.wire_img
+        self.cropper = transforms.CenterCrop(224)
+        
+    def forward(self, img_metas):
+        rs, cs = np.where(img_metas['seg_mask'] > 0)
+        if self.inverse:
+            rs, cs = np.where(img_metas['seg_mask'] == 0)
+
+        img = self.cropper(Image.fromarray(img_metas['img'].copy()))
+        wire_synth = np.ones_like(np.array(img)) * 255
+        wire_synth[rs, cs, :] = np.array(self.wire)[rs, cs, :]
+        wire = Image.fromarray(wire_synth)
+        
+        comb = ImageChops.multiply(img, wire)
+        return np.array(comb)
 
 
 class BoxCalcSyntheticPattern(nn.Module):
