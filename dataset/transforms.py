@@ -23,6 +23,7 @@ def get_transform(aug_type):
         val_transform = None
     elif aug_type == 'basic':
         train_transform = transforms.Compose([
+            UseImage(),
             transforms.ToPILImage(),
             transforms.RandomCrop(224),
             transforms.RandomHorizontalFlip(),
@@ -30,6 +31,7 @@ def get_transform(aug_type):
             transforms.Normalize(cubox_mean, cubox_std)
         ])
         val_transform = transforms.Compose([
+            UseImage(),
             transforms.ToPILImage(),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
