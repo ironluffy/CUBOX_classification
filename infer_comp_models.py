@@ -1,27 +1,20 @@
-from cv2 import transform
 import torch
 import torch.utils.data
 import torch.nn.parallel
-from datetime import datetime
 import pytz
 
 import os
-import numpy as np
 import tqdm
 import torch
 from torch.utils.data import DataLoader
 import models
 import argparse
 import torchvision.transforms as transforms
-import cv2
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from configs import data_config
-from dataset import get_test_loader, get_transform, WireFenceImg, get_test_dataset
+from dataset import get_transform, WireFenceImg, get_test_dataset
 from synthwire_img import wire_cfg
-
-
-KST = pytz.timezone('Asia/Seoul')
 
 
 def create_wire(wire_dict, save_dir, logger):
@@ -90,6 +83,7 @@ def simple_inference(test_loader, model, evaluator, model_name='', transform_typ
             evaluator.update(output, batch)
 
     return evaluator
+
 """
 Example: CUDA_VISIBLE_DEVICES=4 python main.py --method=finetune --data_config=none2all --transform_type=basic --epochs=100 
 """
@@ -101,12 +95,17 @@ BEST_CKPTS = {
 }
 
 WIRE_DICT = {
-    'wire_no': '2',
+    'wire_no': '9',
     'affine_degree': 60,
-    'shear_coords': (30, 45),
+    'shear_coords': (10, 5),
     'distort_scale': 0.5,
     'perspective': True,
 }
+
+# TRANSFORM_TYPES = ['synth_obj_region', 'synth_bgr_region', 'synth_degen', 'box_degen', 'pixel_degen']
+TRANSFORM_TYPES = ['basic']
+SAVE_SAMPLES = False
+
 
 # TODO mode for only evaluation of already trained model
 if __name__ == "__main__":
@@ -142,9 +141,9 @@ if __name__ == "__main__":
     
     test_dataset, classes = get_test_dataset(data_conf, data_root=args.data_root, transform_type=args.transform_type)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.workers, shuffle=True)
-    transform_types = ['synth_degen', 'box_degen', 'pixel_degen']
+    transform_types = TRANSFORM_TYPES
 
-    save_samples = True
+    save_samples = SAVE_SAMPLES
     for model_name, best_ckpt in BEST_CKPTS.items():
         ckpt_dir = os.path.dirname(best_ckpt)
         trained_args = torch.load(os.path.join(ckpt_dir, 'args.pth'))
