@@ -1,22 +1,24 @@
-from .transforms import DummyTransform, get_transform
-from .cubox import CUBOXdataset, occlusion_types
+from .transforms import get_transform
+from .cubox import CUBOXdataset
 from torch.utils.data import ConcatDataset, DataLoader
 import tqdm
 
-def get_cubox_dataset(data_config, data_root, transform, split, combine=True):
+
+def get_cubox_dataset(data_config, data_root, transform, split, combine=True, dataset_name='cubox'):
     datasets = []
     for occl in data_config[split]:
-        # print(f"Collecting Occlusion: {occl}")
         datasets.append(CUBOXdataset(data_root, split=split, occlusion=occl, transform=transform))
-    if combine:
+    if len(datasets) > 1:
         dataset = ConcatDataset(datasets)
+    else:
+        dataset = datasets[0]
     print(f"Total {len(dataset)} number of samples loaded")
     classes = datasets[0].classes
     return dataset, classes
 
-def get_test_dataset(data_config, data_root, transform_type):
+def get_test_dataset(data_config, data_root, transform_type, dataset_name='cubox'):
     _, val_transform = get_transform(transform_type)
-    return get_cubox_dataset(data_config, data_root, val_transform, 'test', combine=True)
+    return get_cubox_dataset(data_config, data_root, val_transform, 'test', combine=True, dataset_name=dataset_name)
 
 
 def get_dataset(dataset_name, data_config, data_root, transform_type):
