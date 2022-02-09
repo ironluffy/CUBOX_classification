@@ -13,7 +13,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 from configs import data_config
-from dataset import get_transform, WireFenceImg, get_test_dataset
+from dataset import get_transform, get_test_dataset, WireFenceImg
 from synthwire_img import wire_cfg
 
 
@@ -39,8 +39,11 @@ def create_wire(wire_dict, save_dir, logger):
 
     save_path = f"{save_dir}/synth_wire.png"
     wire.save(save_path)
+    wandb.log({'wire_img': wandb.Image(wire)})
+
     print_log(f"Synthetic wire saved to path {save_path}", logger=logger)
     print_log(wire_dict, logger=logger)
+    wandb.log({'wire_config': wire_dict})
 
     return wire
 
@@ -53,7 +56,12 @@ def save_denorm_sample(img, img_name, save_path):
 
     # img = img.mul_(cubox_std).add_(cubox_mean)
     img = unnormalize(img)
-    transforms.ToPILImage()(img).save(f"{save_path}/{img_name}")
+    img = transforms.ToPILImage()(img)
+    img.save(f"{save_path}/{img_name}")
+
+    # save_path.split("/")[-1] # transform type
+    # img_name.split("_")[0] # class name
+    wandb.log({f'{save_path.split("/")[-1]}/{img_name.split("_")[0]}': wandb.Image(img)})
 
 
 def simple_inference(test_loader, model, evaluator, model_name='', transform_type='', save_path=None, logger=None):
@@ -95,21 +103,21 @@ BEST_CKPTS = {
 }
 
 WIRE_DICT = {
-    'wire_no': '9',
+    'wire_no': '13',
     'affine_degree': 60,
     'shear_coords': (10, 5),
     'distort_scale': 0.5,
     'perspective': True,
 }
 
-# TRANSFORM_TYPES = ['synth_obj_region', 'synth_bgr_region', 'synth_degen', 'box_degen', 'pixel_degen']
-TRANSFORM_TYPES = ['basic']
-SAVE_SAMPLES = False
+TRANSFORM_TYPES = ['synth_obj_region', 'synth_bgr_region', 'synth_degen', 'box_degen', 'pixel_degen']
+# TRANSFORM_TYPES = ['basic']
+SAVE_SAMPLES = True
 
 
 # TODO mode for only evaluation of already trained model
 if __name__ == "__main__":
-    import re
+    import wandb
     import time
     from utils.eval_meter import Evaluate
     from utils.logging import get_root_logger, print_log
@@ -117,23 +125,30 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', required=True)
     parser.add_argument('--dataset', type=str, default='cubox_singlewire')
+    parser.add_argument('--made_wire', type=str, default=None)
 
-    parser.add_argument('--data_config', type=str)
+    parser.add_argument('--data_config', type=str, default="none2none")
     parser.add_argument('--transform_type', default='synth_degen') # Apply synthetic augmentation
     parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N', help='mini-batch size (default: 128)')
     parser.add_argument('--workers', default=4, type=int)
     parser.add_argument('--result_dir', default='./pred_result')
-
+ 
     start_time = time.strftime("%Y%m%d-%H%M%S")
     save_dir = os.path.join('./synth_results', (start_time))
     os.makedirs(save_dir)
     logger = get_root_logger(log_file=f"{save_dir}/result.txt")
     print_log("Evaluate!", logger)
 
+    wandb.init(project="OBWF_results", entity="noisy-label")
+    wandb.run.name = f"{start_time}/{WIRE_DICT['wire_no']}"
+
     args = parser.parse_args()
 
     # Make synthetic wire image
-    synth_wire = create_wire(WIRE_DICT, save_dir, logger)
+    if args.made_wire:
+        synth_wire = Image.open(args.made_wire)
+    else:
+        synth_wire = create_wire(WIRE_DICT, save_dir, logger)
     WireFenceImg.wire_img = synth_wire
     WireFenceImg.threshold = wire_cfg[WIRE_DICT['wire_no']]['threshold']
     
@@ -144,6 +159,8 @@ if __name__ == "__main__":
     transform_types = TRANSFORM_TYPES
 
     save_samples = SAVE_SAMPLES
+    acc_table = wandb.Table(columns=["run_name", "model_name", "transform_type", "acc", "top5"])
+    aug_table = wandb.Table(columns=["run_name", "transform_type", "cls_name", "img", "img_name"])
     for model_name, best_ckpt in BEST_CKPTS.items():
         ckpt_dir = os.path.dirname(best_ckpt)
         trained_args = torch.load(os.path.join(ckpt_dir, 'args.pth'))
@@ -163,10 +180,11 @@ if __name__ == "__main__":
             else:
                 evaluator = simple_inference(test_loader, model, evaluator, model_name, transform_type=transform_type, save_path=None, logger=logger)
 
-            evaluator.summarize()
-        
+            acc_dict = evaluator.summarize()
+            acc_table.add_data(wandb.run.name, model_name, transform_type, acc_dict['acc'], acc_dict['top5'])
         save_samples = False
         model.cpu()
         del(model)
 
+    wandb.log({"Accuracy Metric": acc_table})
     print_log("Inference Done!", logger)
