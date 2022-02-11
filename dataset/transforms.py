@@ -1,4 +1,5 @@
 import numpy as np
+import re
 import cv2
 import torch
 import torch.nn as nn
@@ -15,7 +16,7 @@ class WireFenceImg:
         self.wire_img = wire_img
 
 
-def get_transform(aug_type):
+def get_transform(aug_type, **transform_kwargs):
     cubox_mean = (0.5156, 0.5161, 0.5164)
     cubox_std = (0.1498, 0.1498, 0.1497)
     if aug_type == 'debug':
@@ -100,6 +101,38 @@ def get_transform(aug_type):
             transforms.ToTensor(),
             transforms.Normalize(cubox_mean, cubox_std)
         ])
+    elif aug_type == "box_white":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            BoxCalcSyntheticPattern('center', box_color=(255, 255, 255)),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "box_white":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            BoxCalcSyntheticPattern('center', box_color='wire'),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
     elif aug_type == "pixel_degen":
         train_transform = transforms.Compose([
             UseImage(),
@@ -143,6 +176,70 @@ def get_transform(aug_type):
         ])
         val_transform = transforms.Compose([
             RegionSyntheticPattern(inverse=True),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "cross_wires_obj_loose":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            CrossWireSynth(occ_bgr=False, density='wireloose'),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "cross_wires_obj_med":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            CrossWireSynth(occ_bgr=False, density='wiremedium'),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "cross_wires_obj_dense":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            CrossWireSynth(occ_bgr=False, density='wiredense'),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+    elif aug_type == "cross_wires_bgr":
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(cubox_mean, cubox_std)
+        ])
+        val_transform = transforms.Compose([
+            CrossWireSynth(occ_bgr=True, **transform_kwargs),
             transforms.ToPILImage(),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
@@ -349,6 +446,40 @@ class PixelNoise(nn.Module):
         for pixel_c, pixel_r in zip(pixel_cs, pixel_rs):
             img[pixel_c, pixel_r, :] = 0
         img = Image.fromarray(img)
+
+        return np.array(img)
+
+
+class CrossWireSynth(nn.Module):
+    def __init__(self, occ_bgr=False, density='none'):
+        super().__init__()
+        self.density = density
+        self.occ_bgr = occ_bgr
+        self.cropper = transforms.CenterCrop(224)
+
+    def forward(self, img_metas):
+        """
+        - img_metas
+            - img: np array
+            - img_locs: 물체 bbox 꼭지점 4곳
+        """
+        img = self.cropper(Image.fromarray(img_metas['img']))
+        occluded_img = self.cropper(Image.open(re.sub('none', self.density, img_metas['img_name'])))
+
+        obj_np = ((img_metas['seg_mask'] > 0) * 255).astype(np.uint8)
+        bgr_np = (255 - obj_np).astype(np.uint8)
+
+        obj_area = Image.fromarray(obj_np).convert('RGB')
+        bgr_area = Image.fromarray(bgr_np).convert('RGB')
+
+        if self.occ_bgr:
+            obj = ImageChops.multiply(img, obj_area)
+            bgr = ImageChops.multiply(occluded_img, bgr_area)
+        else:
+            obj = ImageChops.multiply(occluded_img, obj_area)
+            bgr = ImageChops.multiply(img, bgr_area)
+
+        img = ImageChops.add(obj, bgr)
 
         return np.array(img)
 
