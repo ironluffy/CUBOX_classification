@@ -154,8 +154,8 @@ class Evaluate(object):
 
     def print_acc_metric(self):
         print_log("\nSummarize Accuracy: ", self.logger)
-        acc, top5_acc = self.acc_summary()
-        print_log(f"\nAccuracy Top-1: {acc}, Top-5 : {top5_acc}\n", self.logger)
+        top1_acc, top5_acc = self.acc_summary()
+        print_log(f"\nAccuracy Top-1: {top1_acc}, Top-5 : {top5_acc}\n", self.logger)
         
         print_log("\n\n =========  Accuracy Metric  =========", self.logger)
         accuracy_table_data = [["Class ID", "TP", "TN", "FP", "FN", "Accuracy"]]
@@ -166,6 +166,12 @@ class Evaluate(object):
         
         accuracy_table = AsciiTable(accuracy_table_data)
         print_log(accuracy_table.table, self.logger)
+
+        return { 
+                    "per_class": accuracy_table_data, 
+                    "top1": top1_acc,
+                    "top5": top5_acc,
+                }
 
 
     def print_f1_metric(self):
@@ -223,7 +229,8 @@ class Evaluate(object):
         self.reset()
         self.summarize_result()
 
-        self.print_acc_metric()
+        acc_dict = self.print_acc_metric()
+        return acc_dict
         # self.print_f1_metric()
         # self.print_auc_metric()
     
