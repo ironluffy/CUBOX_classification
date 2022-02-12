@@ -69,6 +69,7 @@ class CUBOXdataset(Dataset):
         seg_mask, img_locs = self.calc_img_loc(img_name)
 
         img_metas = {
+            'img_name': img_name,
             'img': img,
             'img_locs': img_locs,
             'seg_mask': seg_mask,
