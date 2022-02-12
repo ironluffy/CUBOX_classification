@@ -69,3 +69,63 @@ data_config = {
 }
 
 data_config["cubox_singlewire"] = data_config["cubox"]
+
+
+wire_cfg = {
+    '1': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/1x.jpg',
+        'threshold': 100,
+    },
+    '2': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/2x.jpg',
+        'threshold': 100,
+    },
+    '3': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/3x.jpg',
+        'threshold': 100,
+    },
+    '4': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/4x.jpg',
+        'threshold': 100,
+    },
+    '8': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/8x.jpg',
+        'threshold': 155,
+    },
+    '9': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/9x.jpg',
+        'threshold': 155,
+    },
+    '10': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/10x.jpg',
+        'threshold': 210, # bad threshold..
+    },
+    '11': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/11x.jpg',
+        'threshold': 125,
+    },
+    '13': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/13x.jpg',
+        'threshold': 125,
+    },
+    '16': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/16x.jpg',
+        'threshold': 125,
+    },
+    '17': {
+        'wire_path': '/mnt/disk1/cubox_dataset/patterns/17x.jpg',
+        'threshold': 125,
+    },
+    '100': {
+        'wire_path': None,
+        'threshold': None,
+    },
+}
+
+
+transform_config = {
+    'box': {
+        
+    }
+
+}
