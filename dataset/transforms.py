@@ -101,38 +101,6 @@ def get_transform(aug_type, **transform_kwargs):
             transforms.ToTensor(),
             transforms.Normalize(cubox_mean, cubox_std)
         ])
-    elif aug_type == "box_white":
-        train_transform = transforms.Compose([
-            UseImage(),
-            transforms.ToPILImage(),
-            transforms.RandomCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(cubox_mean, cubox_std)
-        ])
-        val_transform = transforms.Compose([
-            BoxCalcSyntheticPattern('center', box_color=(255, 255, 255)),
-            transforms.ToPILImage(),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(cubox_mean, cubox_std)
-        ])
-    elif aug_type == "box_white":
-        train_transform = transforms.Compose([
-            UseImage(),
-            transforms.ToPILImage(),
-            transforms.RandomCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(cubox_mean, cubox_std)
-        ])
-        val_transform = transforms.Compose([
-            BoxCalcSyntheticPattern('center', box_color='wire'),
-            transforms.ToPILImage(),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(cubox_mean, cubox_std)
-        ])
     elif aug_type == "pixel_degen":
         train_transform = transforms.Compose([
             UseImage(),
@@ -245,6 +213,12 @@ def get_transform(aug_type, **transform_kwargs):
             transforms.ToTensor(),
             transforms.Normalize(cubox_mean, cubox_std)
         ])
+    elif aug_type == "cutmix":
+        train_transform = CutMix()
+        val_transform = nn.Identity()
+    elif aug_type == "mixup":
+        train_transform = MixUp()
+        val_transform = nn.Identity()
     else:
         raise NotImplementedError
 
@@ -507,10 +481,13 @@ class CutMix(nn.Module):
         
         return bbx1, bbx2, bby1, bby2
 
-    def __call__(self, pic_tensor, target):
+    def __call__(self, batch):
+        pic_tensor = batch['img'].cuda()
+        target = batch['gt'].cuda()  
+
         p = np.random.rand(1)
         # Randomly applied
-        if p < self.cutmix_prob:
+        if p < self.prob:
             return pic_tensor, target, target, 1.0
 
         lam = np.random.beta(self.alpha, self.alpha)
@@ -527,6 +504,43 @@ class CutMix(nn.Module):
         pic_tensor[:, :, bbx1:bbx2, bby1:bby2] = pic_tensor[rand_index, :, bbx1:bbx2, bby1:bby2]
         lam = 1 - ((bbx2 - bbx1) * (bby2-bby1) / (w * h))
         
+        # Return mixed image & original label & mixed label & mixed proportion
+        return pic_tensor, target_a, target_b, lam
+
+
+class MixUp(nn.Module):
+    """
+    MixUp: 이미지들 사이의 투명도를 다르게 하고, 해당 투명도에 맞게 라벨을 확률로 만드는 것
+    """
+    def __init__(self, prob=0.8, alpha=1.0):
+        super().__init__()
+        self.alpha = alpha
+        self.prob = prob
+
+    def random_transparency(self):
+        probs = []        
+        return probs
+
+    def __call__(self, batch):
+        pic_tensor = batch['img'].cuda()
+        target = batch['gt'].cuda()
+
+        # p = np.random.rand(1)
+        p = 1
+        batch_size, _, w, h = pic_tensor.shape
+        # Randomly applied
+        if p < self.prob:
+            return pic_tensor, target, target, 1.0
+
+        # lam = torch.Tensor(np.random.beta(self.alpha, self.alpha, size=(batch_size,))).cuda()
+        lam = np.random.beta(self.alpha, self.alpha)
+        rand_index = torch.randperm(batch_size).cuda()
+
+        target_a = target
+        target_b = target[rand_index]
+
+        # Mix with Label!
+        pic_tensor = lam * pic_tensor + (1 - lam) * pic_tensor[rand_index]
         # Return mixed image & original label & mixed label & mixed proportion
         return pic_tensor, target_a, target_b, lam
 

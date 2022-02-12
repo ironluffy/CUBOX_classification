@@ -2,7 +2,7 @@ import wandb
 import torch.utils.data
 
 from utils import Observe
-from dataset.transforms import CutMix
+from dataset.transforms import get_transform
 
 method_hyperparams = dict()
 
@@ -36,7 +36,7 @@ def train(train_loader, model, optimizer, epoch, args, epoch_storage):
     return model_observe
 
 
-def train_cutmix(train_loader, model, optimizer, epoch, args, epoch_storage):
+def train_mixed_label(train_loader, model, optimizer, epoch, args, epoch_storage):
     """
         Run one train epoch
     """
@@ -46,15 +46,13 @@ def train_cutmix(train_loader, model, optimizer, epoch, args, epoch_storage):
     model_observe = Observe(prefix='Train')
     criterion = torch.nn.CrossEntropyLoss()
 
-    # cutmix augmenatation
-    cutmix = CutMix()
+    # mixing augmenatation
+    mixer, _ = get_transform(args.mixed_transform)
 
     for i, batch in enumerate(train_loader):
         # measure data loading time
         optimizer.zero_grad()
-        img, gt = batch['img'].cuda(), batch['gt'].cuda()
-
-        img, gt, gt_mixed, mixed_prop = cutmix(img, gt)
+        img, gt, gt_mixed, mixed_prop = mixer(batch)
 
         # compute output
         output = model(img)

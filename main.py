@@ -19,6 +19,7 @@ parser.add_argument('--experiment', required=True, type=str)
 parser.add_argument('--data_root', default='/mnt/disk1/cubox_dataset/original/images', type=str)
 parser.add_argument('--method', type=str)
 parser.add_argument('--data_config', type=str)
+parser.add_argument('--mixed_transform', type=str, default=None, choices=['cutmix', 'mixup'])
 parser.add_argument('--transform_type', default='basic')
 parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N', help='mini-batch size (default: 128)')
 parser.add_argument('--epochs', default=100, type=int, metavar='N', help='number of total epochs to run')
@@ -38,10 +39,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     data_conf = data_config[args.dataset][args.data_config]
-    args.save_dir = os.path.join('../saved_results', args.method, args.data_config, args.transform_type,
+    args.save_dir = os.path.join('./saved_results', args.method, args.data_config, args.transform_type,
                                  time.strftime("%Y%m%d-%H%M%S"))
     wandb.login(key='acbbebf92bf3a0033a26d766ff2cd06c15e5a2ab')
-    wandb.init(project="cubox_cls", entity="yuuraa")
+    wandb.init(project="OBWF", entity="noisy-label")
     wandb.run.name = os.path.join(args.experiment, args.method, args.data_config, args.transform_type)
 
     # cudnn.benchmark = True
@@ -66,6 +67,8 @@ if __name__ == "__main__":
     method = importlib.import_module('classification.{}'.format(args.method))
     wandb.config.update(method.method_hyperparams)
     train = method.train
+    if args.mixed_transform:
+        train = method.train_mixed_label
 
     save_checkpoint({
         'epoch': 0,
