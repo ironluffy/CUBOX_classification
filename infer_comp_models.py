@@ -12,9 +12,9 @@ import argparse
 import torchvision.transforms as transforms
 from PIL import Image
 
-from configs import data_config
+from configs import data_config, wire_cfg, transform_config
 from dataset import get_transform, get_test_dataset, WireFenceImg
-from synthwire_img import wire_cfg
+# from synthwire_img import wire_cfg
 
 
 def create_wire(wire_dict, save_dir, logger):
@@ -73,6 +73,7 @@ def simple_inference(test_loader, model, evaluator, model_name='', transform_typ
 
     print_log(f"Start inference {model_name.capitalize()}-{transform_type}...", logger)
     model.eval()
+    evaluator.reset()
 
     with torch.no_grad():
         for i, batch in tqdm.tqdm(enumerate(test_loader)):
@@ -103,7 +104,7 @@ BEST_CKPTS = {
 }
 
 WIRE_DICT = {
-    'wire_no': '13',
+    'wire_no': '17',
     'affine_degree': 60,
     'shear_coords': (10, 5),
     'distort_scale': 0.5,
@@ -112,6 +113,10 @@ WIRE_DICT = {
 
 TRANSFORM_TYPES = ['synth_obj_region', 'synth_bgr_region', 'synth_degen', 'box_degen', 'pixel_degen']
 # TRANSFORM_TYPES = ['basic']
+# TRANSFORM_TYPES = ['synth_obj_region', 'synth_bgr_region', 'synth_degen', 'box_degen', 'pixel_degen', 'box_white', 'box_wire']
+
+# TODO: transform_dict 추가하고 wandb 로깅하고 transforms에 인자로 넘겨주기
+
 SAVE_SAMPLES = True
 
 
@@ -126,12 +131,15 @@ if __name__ == "__main__":
     parser.add_argument('--data_root', required=True)
     parser.add_argument('--dataset', type=str, default='cubox_singlewire')
     parser.add_argument('--made_wire', type=str, default=None)
+    parser.add_argument('--run_name', type=str, default=None)
 
     parser.add_argument('--data_config', type=str, default="none2none")
     parser.add_argument('--transform_type', default='synth_degen') # Apply synthetic augmentation
     parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N', help='mini-batch size (default: 128)')
     parser.add_argument('--workers', default=4, type=int)
     parser.add_argument('--result_dir', default='./pred_result')
+
+    args = parser.parse_args()
  
     start_time = time.strftime("%Y%m%d-%H%M%S")
     save_dir = os.path.join('./synth_results', (start_time))
@@ -140,9 +148,10 @@ if __name__ == "__main__":
     print_log("Evaluate!", logger)
 
     wandb.init(project="OBWF_results", entity="noisy-label")
-    wandb.run.name = f"{start_time}/{WIRE_DICT['wire_no']}"
-
-    args = parser.parse_args()
+    if args.run_name: 
+        wandb.run.name = args.run_name
+    else: 
+        wandb.run.name = f"{start_time}/{WIRE_DICT['wire_no']}"
 
     # Make synthetic wire image
     if args.made_wire:
@@ -160,7 +169,7 @@ if __name__ == "__main__":
 
     save_samples = SAVE_SAMPLES
     acc_table = wandb.Table(columns=["run_name", "model_name", "transform_type", "acc", "top5"])
-    aug_table = wandb.Table(columns=["run_name", "transform_type", "cls_name", "img", "img_name"])
+    # aug_table = wandb.Table(columns=["run_name", "transform_type", "cls_name", "img", "img_name"])
     for model_name, best_ckpt in BEST_CKPTS.items():
         ckpt_dir = os.path.dirname(best_ckpt)
         trained_args = torch.load(os.path.join(ckpt_dir, 'args.pth'))
@@ -168,8 +177,8 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(best_ckpt)['state_dict'])
         model.cuda()
         
-        evaluator = Evaluate(classes, logger)
         for transform_type in transform_types:
+            evaluator = Evaluate(classes, logger)
             _, val_transform = get_transform(transform_type)
             test_dataset.transform = val_transform
             test_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.workers, shuffle=True)
@@ -181,7 +190,7 @@ if __name__ == "__main__":
                 evaluator = simple_inference(test_loader, model, evaluator, model_name, transform_type=transform_type, save_path=None, logger=logger)
 
             acc_dict = evaluator.summarize()
-            acc_table.add_data(wandb.run.name, model_name, transform_type, acc_dict['acc'], acc_dict['top5'])
+            acc_table.add_data(wandb.run.name, model_name, transform_type, acc_dict['top1'], acc_dict['top5'])
         save_samples = False
         model.cpu()
         del(model)
