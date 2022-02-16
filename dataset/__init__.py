@@ -1,7 +1,6 @@
-from .transforms import get_transform
+from .transforms import get_transform, WireFenceImg
 from .cubox import CUBOXdataset
 from torch.utils.data import ConcatDataset, DataLoader
-import tqdm
 
 
 def get_cubox_dataset(data_config, data_root, transform, split, combine=True, dataset_name='cubox'):

@@ -43,7 +43,7 @@ class CUBOXdataset(Dataset):
         try:
             seg_map = Image.open(seg_name)
         except:
-            print(img_name, seg_name)
+            # print(img_name, seg_name)
             return None, None
         
         seg_map = transforms.CenterCrop(224)(seg_map)
