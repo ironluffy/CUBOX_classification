@@ -15,6 +15,11 @@ def get_model(model_name, num_classes, pretrained=True):
             model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
         else:
             model = EfficientNet.from_name('efficientnet-b4', num_classes=num_classes)
+    elif model_name == 'efficientnetv3':
+        if pretrained:
+            model = EfficientNet.from_pretrained('efficientnet-b3', num_classes=num_classes)
+        else:
+            model = EfficientNet.from_name('efficientnet-b3', num_classes=num_classes)
     elif model_name == 'dummy':
         return DummyNetwork(num_classes=num_classes, pretrained=pretrained)
     else:
