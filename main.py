@@ -39,7 +39,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     data_conf = data_config[args.dataset][args.data_config]
-    args.save_dir = os.path.join('./saved_results', args.method, args.data_config, args.transform_type,
+    ttype = f"{args.mixed_transform}_{args.transform_type}" if args.mixed_transform else args.transform_type
+    args.save_dir = os.path.join('./saved_results', args.method, args.data_config, ttype, args.arch,
                                  time.strftime("%Y%m%d-%H%M%S"))
     wandb.login(key='acbbebf92bf3a0033a26d766ff2cd06c15e5a2ab')
     wandb.init(project="OBWF", entity="noisy-label")
@@ -97,16 +98,16 @@ if __name__ == "__main__":
                                                     epoch=epoch + 1)
         # evaluate on test set
         for i, test_loader in enumerate(test_loaders):
-            test_obs[data_conf["val"][i]] = validate(test_loader, model, prefix='test/{}'.format(data_conf["test"][i]),
+            test_obs[data_conf["test"][i]] = validate(test_loader, model, prefix='test/{}'.format(data_conf["test"][i]),
                                                      epoch=epoch + 1)
 
         val_accs = []
-        for occl in data_conf["train"]:
+        for occl in data_conf["val"]:
             val_accs.append(val_obs[occl].accuracy.avg.cpu().numpy())
         val_acc = np.mean(val_accs)
 
         test_accs = []
-        for occl in data_conf["train"]:
+        for occl in data_conf["test"]:
             test_accs.append(test_obs[occl].accuracy.avg.cpu().numpy())
         test_acc = np.mean(test_accs)
 
@@ -128,5 +129,5 @@ if __name__ == "__main__":
                 'best_val': best_val,
             }, is_best, filename=os.path.join(args.save_dir, 'epoch{}.pth'.format(epoch)))
 
-    for i, occl in enumerate(data_conf["train"]):
+    for i, occl in enumerate(data_conf["test"]):
         wandb.log({"{}/Best Val. Test Acc.".format(occl): test_accs[i]})
