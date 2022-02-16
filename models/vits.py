@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+import os
 import torch
 import torch.nn as nn
 from functools import partial, reduce
@@ -141,3 +142,31 @@ def moco_vit_conv_base(**kwargs):
         norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs)
     model.default_cfg = _cfg()
     return model
+
+
+def load_checkpoint(model, model_name, dist=False):
+    pretrained_paths = {
+        'moco_vit_base': '/home/yura/Computer_Vision_LAB/CUBOX/cubox_classification_from_kdm/mocov3_checkpoints/linear-vit-b-300ep.pth.tar'
+    }
+    pretrained_ckpt = pretrained_paths[model_name]
+
+    if os.path.isfile(pretrained_ckpt):
+        print("=> loading checkpoint '{}'".format(pretrained_ckpt))
+        checkpoint = torch.load(pretrained_ckpt, map_location="cpu")
+
+        # rename moco pre-trained keys
+        state_dict = checkpoint['state_dict']
+        for k in list(state_dict.keys()):
+            # retain only base_encoder up to before the embedding layer
+            if k.startswith('module.') and not k.startswith('module.head'):
+                # remove prefix
+                state_dict[k[len("module."):]] = state_dict[k]
+            # delete renamed or unused k
+            del state_dict[k]
+
+        msg = model.load_state_dict(state_dict, strict=False)
+        assert set(msg.missing_keys) == {"head.weight", "head.bias"}
+
+        print("=> loaded pre-trained model '{}'".format(pretrained_ckpt))
+    else:
+        print("=> no checkpoint found at '{}'".format(pretrained_ckpt))

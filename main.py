@@ -29,6 +29,7 @@ parser.add_argument('--not_pretrain', action='store_false')
 parser.add_argument('--optim', default='sgd', choices=['sgd', 'adam', 'adamw'])
 parser.add_argument('--sched', default='cos', choices=['multi', 'non', 'cos', 'cos_warm'])
 parser.add_argument('--workers', default=4, type=int)
+parser.add_argument('--dist', action='store_true')
 
 """
 Example: CUDA_VISIBLE_DEVICES=4 python main.py --method=finetune --data_config=none2all --transform_type=basic --epochs=100 
@@ -57,7 +58,7 @@ if __name__ == "__main__":
     train_loader, val_loaders, test_loaders, num_classes = get_loaders(args.dataset, data_conf, data_root=args.data_root,
                                                                        transform_type=args.transform_type, args=args)
 
-    model = models.get_model(args.arch, num_classes=num_classes, pretrained=args.not_pretrain)
+    model = models.get_model(args.arch, num_classes=num_classes, pretrained=args.not_pretrain, dist=args.dist)
     model.cuda()
     wandb.watch(model)
     optimizer = get_optimizer(args.dataset, args.optim, model, args.lr)
