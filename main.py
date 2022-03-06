@@ -16,7 +16,7 @@ from classification.eval import validate
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='cubox', type=str, choices=['cubox'])
 parser.add_argument('--experiment', required=True, type=str)
-parser.add_argument('--data_root', default='/mnt/disk1/cubox_dataset/original/images', type=str)
+parser.add_argument('--data_root', default='/datasets/cubox', type=str)
 parser.add_argument('--method', type=str)
 parser.add_argument('--data_config', type=str)
 parser.add_argument('--mixed_transform', type=str, default=None, choices=['cutmix', 'mixup'])
@@ -41,9 +41,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     data_conf = data_config[args.dataset][args.data_config]
     ttype = f"{args.mixed_transform}_{args.transform_type}" if args.mixed_transform else args.transform_type
-    args.save_dir = os.path.join('./saved_results', args.method, args.data_config, ttype, args.arch,
+    args.save_dir = os.path.join('/outputs/saved_results', args.method, args.data_config, ttype, args.arch,
                                  time.strftime("%Y%m%d-%H%M%S"))
-    wandb.login(key='acbbebf92bf3a0033a26d766ff2cd06c15e5a2ab')
+    wandb.login(key='a443bf1f92b52a0183a2d645c4c5734af5c3527a')
     wandb.init(project="OBWF", entity="noisy-label")
     wandb.run.name = os.path.join(args.experiment, args.method, args.data_config, args.transform_type)
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     train_loader, val_loaders, test_loaders, num_classes = get_loaders(args.dataset, data_conf, data_root=args.data_root,
                                                                        transform_type=args.transform_type, args=args)
 
-    model = models.get_model(args.arch, num_classes=num_classes, pretrained=args.not_pretrain, dist=args.dist)
+    model = torch.nn.DataParallel(models.get_model(args.arch, num_classes=num_classes, pretrained=args.not_pretrain, dist=args.dist))
     model.cuda()
     wandb.watch(model)
     optimizer = get_optimizer(args.dataset, args.optim, model, args.lr)

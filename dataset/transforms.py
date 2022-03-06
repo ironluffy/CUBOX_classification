@@ -41,6 +41,20 @@ def get_transform(aug_type, **transform_kwargs):
             transforms.ToTensor(),
             transforms.Normalize(cubox_mean, cubox_std)
         ])
+    elif aug_type == 'no_normal':
+        train_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+        ])
+        val_transform = transforms.Compose([
+            UseImage(),
+            transforms.ToPILImage(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+        ])
     elif aug_type[:-1] == 'synthetic':
         train_transform = transforms.Compose([
             transforms.ToPILImage(),
